@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Archives: 2014/2 | Hexo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="og:type" content="blog">
+<meta name="og:title">
+<meta name="og:url" content="http://yoursite.com/archives/2014/02/">
+<meta name="og:image">
+<meta name="og:site_name" content="Hexo">
+<meta name="og:description">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternative" href="/atom.xml" title="Hexo" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  <link href="http://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  <link rel="stylesheet" href="/css/style.css" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+</head>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Hexo</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" results="0" class="search-form-input" placeholder="Search"><input type="submit" value="&#xF002;" class="search-form-submit"><input type="hidden" name="q" value="site:http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/02/28/the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization/" class="article-date">
+  <time datetime="2014-02-27T18:46:18.000Z" itemprop="datePublished">Feb 28 2014</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/02/28/the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization/">The Making Of Sarcasm (2) - AST, Generators and Fun with Visualization</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>In <a href="http://catx.me/2014/02/25/the-making-of-sarcasm-1/" target="_blank">part 1</a> we discussed the design goals of Sarcasm and devised a grammar specification that covers most of Irony&#39;s features.</p>
+<p>Continuing from <a href="https://github.com/akfish/Sarcasm/commit/15c9e6e1ef69bd1150d51af558e3a897e09accb8" target="_blank">commit 15c9e6</a>, in which I implemented the <a href="https://github.com/akfish/Sarcasm/blob/15c9e6e1ef69bd1150d51af558e3a897e09accb8/Sarcasm/Parser/SarcasmGrammar.cs" target="_blank">grammar specs</a> by hand with Irony, we will discuss the following topics:</p>
+<ul>
+<li>Construction of abstract syntax tree</li>
+<li>Generator workflow</li>
+<li>MarkDown generator</li>
+<li>Having some fun with visualization</li>
+</ul>
+<h2 id="ast-overview">AST Overview</h2>
+<p>After <a href="https://github.com/akfish/Sarcasm/blob/develop/Sarcasm/Parser/SarcasmGrammar.cs" target="_blank">grammar class</a> is implemented, the first thing you are going to do is to create a parser instance:</p>
+<figure class="highlight cs"><table><tr><td class="gutter"><pre>1
+2
+</pre></td><td class="code"><pre><span class="keyword">var</span> language = <span class="keyword">new</span> LanguageData(<span class="keyword">new</span> SarcasmGrammar());
+<span class="keyword">var</span> parser = <span class="keyword">new</span> Irony.Parsing.Parser(_language);
+</pre></td></tr></table></figure>
+
+<p>With the Parser instance, we can parse source code by simply:</p>
+<figure class="highlight cs"><table><tr><td class="gutter"><pre>1
+2
+3
+</pre></td><td class="code"><pre><span class="keyword">var</span> parseTree = parser.Parse(sourceCode);
+<span class="keyword">var</span> parseRoot = parseTree.Root;
+<span class="keyword">var</span> astRoot = ParseRoot.AstNode;
+</pre></td></tr></table></figure>
+
+<p>If something is wrong with the grammar or source code, parseRoot and astRoot will be null. For now I will not go into error handling.</p>
+<p>Two kinds of trees are generated when Irony parses the source code: parsing tree and optional abstract syntax tree. To create an AST, you must do the following:</p>
+<p>1. Set language flag in grammar class&#39;s constructor</p>
+<figure class="highlight cs"><table><tr><td class="gutter"><pre>1
+</pre></td><td class="code"><pre>LanguageFlags |= LanguageFlags.CreateAst;
+</pre></td></tr></table></figure>
+
+<p>2. Create a bunch of AST node class deriving from Irony.Interpreter.Ast (also remember to add reference to assembly Irony.Interpreter.dll).</p>
+<figure class="highlight cs"><table><tr><td class="gutter"><pre>1
+2
+3
+4
+5
+6
+</pre></td><td class="code"><pre><span class="comment">// Make your own base class will make life eaiser</span>
+<span class="keyword">public</span> <span class="keyword">abstract</span> <span class="keyword">class</span> SarcasmNode : AstNode {<span class="comment">/*...*/</span>}
+<span class="comment">// For other nodes</span>
+<span class="keyword">public</span> <span class="keyword">class</span> Document : SarcasmNode {<span class="comment">/*...*/</span>}
+<span class="keyword">public</span> <span class="keyword">class</span> IdNode : SarcasmNode {<span class="comment">/*...*/</span>}
+<span class="comment">/*...*/</span>
+</pre></td></tr></table></figure>
+
+<p>3. Assign AST node class to each Terminal/NonTerminal instances.</p>
+<pre class="brush:csharp">// For terminals
+var ID = new IdentifierTerminal("ID");
+ID.AstConfig.NodeType = typeof (IdNode);
+// For non-terminals
+var Directive = new NonTerminal("Directive", typeof(DirectiveNode));</pre>
+4\. Override AST node's Init method to handle initialization.
+<pre class="brush:csharp">// In AST node class
+        public AstNode ChildNode;
+
+        public override void Init(AstContext context, ParseTreeNode treeNode)
+        {
+            // Keep this
+            base.Init(context, treeNode);
+            // treeNode is the corresponding node in parse tree, contains information like:
+            // Token
+            var token = treeNode.Token;
+            // Term
+            var term = treeNode.Term;
+            // Child nodes
+            var nodes = treeNode.GetMappedChildNodes();
+
+            // Set AsString to a human readable format. It will be used to display AST in Irony.GrammarExplorer
+            AsString = "Id: " + token.Text;
+            // Use AddChild to build tree structure, it returns an AstNode instance of child's AST node 
+            ChildNode = AddChild(string.Empty, nodes[0]);
+        }</pre>
+That's almost all you need to know about how to construct an AST. However, if you mess it up, things can get ugly since the debug information is extremely not helpful. The most common exception on can get is:
+> System.NullReferenceException: Object reference not set to an instance of an object.
+> at Irony.Ast.AstBuilder.BuildAst(ParseTreeNode parseNode) in f:\Dev\Tool\Irony_2013_12_12\Irony\Ast\AstBuilder.cs:line 97
+This will not help you at all. But I will tell you that this always has to do with forgetting to set AST node type to one of your Terminals/Non-Terminals.
+
+Here are some tips I learned in the hard way (the only way mostly, since Irony's documentation is poor):
+
+*   Assign AST node type to all Terminals/NonTerminals, including any intermediate/temporary ones.
+*   Except the ones marked as transient. They will not be created at all.
+*   CommentTerminals will NOT be mapped to AST at all. You will get the above error regardless the AST node type is set or not.
+
+## Generator Workflow
+
+AST marks the watershed between compiler's front end and back end. Although there're still some work (e.g. type validation and  semantic analysis) left to be done, we can already generate something with this AST now. The most commonly used method here is the [visitor pattern](http://en.wikipedia.org/wiki/Visitor_pattern):
+
+1\. Declare a interface for Visitor, one overload for each AST node
+<pre class="brush:csharp">    public interface ISarcasmVisitor
+    {
+        void Visit(IdNode node);
+        void Visit(Document node);
+        void Visit(StringValueNode node);
+        // others
+    }</pre>
+2\. Add virtual/abstract method to AST base class and implement in all derived class
+<pre class="brush:csharp">    public abstract class SarcasmNode : AstNode
+    {
+        public abstract void Accept(ISarcasmVisitor visitor);
+    }
+
+    public class Document : SarcasmNode
+    {
+        public override void Accept(ISarcasmVisitor visitor)
+        {
+            visitor.Visit(this);
+        }
+    }</pre>
+3\. Then we can create a generator by implement specific ISarcasmVisitor for different workflow, not only for target code generation but also outlining, semantic analysis.
+<pre class="brush:csharp">    public abstract class TargetGenerator
+    {
+        public SarcasmParser Parser { get; set; }
+
+        protected TargetGenerator(SarcasmParser parser)
+        {
+            Parser = parser;
+        }
+
+        protected virtual void BeforeVisitor(StreamWriter writer, ISarcasmVisitor visitor) { }
+        protected abstract ISarcasmVisitor MakeVisitor(StreamWriter writer);
+        protected virtual void AfterVisitor(StreamWriter writer, ISarcasmVisitor visitor) { }
+        public bool Generate(StreamReader sourceStream, StreamWriter targetStream)
+        {
+            // Parse first
+            Parser.Parse(sourceStream);
+            if (Parser.IsValid)
+            {
+                var visitor = MakeVisitor(targetStream);
+                BeforeVisitor(targetStream, visitor);
+                // Visit AST
+                Parser.Document.Accept(visitor);
+                AfterVisitor(targetStream, visitor);
+            }
+            targetStream.Flush();
+            return Parser.IsValid;
+        }
+    }</pre>
+
+<h2 id="markdown-generation">MarkDown Generation</h2>
+<p>MarkDown generation for Sarcasm is very straight forward, since the syntax is in MarkDown. All I need to do is remove comment delimiters, add correct amount of line endings, format grammar rule into block and escape some special characters.</p>
+<p>Again I won&#39;t bother with the details here. Just see <a href="https://github.com/akfish/Sarcasm/blob/develop/Sarcasm/Generator/MarkDownGenerator.cs" target="_blank">the code</a> for yourself.</p>
+<h2 id="something-fun-with-visualization">Something Fun with Visualization</h2>
+<p>The original plan was to start generate C# parser class from here. Then I found an interesting project <a href="http://arborjs.org" target="_blank">arbor.js</a> (especially its <a href="http://arborjs.org/halfviz/" target="_blank">halfviz</a> demo) and decided to do something fun with it. The idea is to make a better tool for debug. What debug information is better than a visualized one?</p>
+<p>The halfviz demo converts a simple language called HalfTone to a node network. With the generator framework in place, it took me less than half an hour to <a href="https://github.com/akfish/Sarcasm/blob/feature/Visualization/Sarcasm/Generator/HalfToneGenerator.cs" target="_blank">generate node</a> representation from Sarcasm grammar source file. This can be used to visualize references between terminals and non-terminals:</p>
+<p><a href="http://catx.me/wordpress/wp-content/uploads/2014/02/vis.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/vis.png" alt="sarcasm-vis"></a></p>
+<p>You can play with it live <a href="http://arborjs.org/halfviz/#/NjM0OA" target="_blank">here</a>. It looks more confusing in this form, for now. But with some interaction (filtering, folding, highlighting for example), it can help develops quickly navigate though the grammar.
+Here&#39;s another concept of how to visualize grammar related errors in this form (click to enlarge):
+<a href="http://catx.me/wordpress/wp-content/uploads/2014/02/concept.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/concept.png" alt="sarcasm-concept"></a></p>
+<p>Imagine view build errors in Visual Studio with this graph and navigate to the line that is responsible by click on the node. I definitely will try to create something like that later when I begin to make tool chain for Sarcasm.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2014/02/28/the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization/" data-id="cskpvglgbht2slya" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/.Net/">.Net</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/C++/">C++</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Markdown/">Markdown</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Sarcasm/">Sarcasm</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/compiler/">compiler</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-the-making-of-sarcasm-1" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/02/25/the-making-of-sarcasm-1/" class="article-date">
+  <time datetime="2014-02-24T20:13:46.000Z" itemprop="datePublished">Feb 25 2014</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/02/25/the-making-of-sarcasm-1/">The Making Of Sarcasm (1) - Design Goals And Grammar</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="introduction">Introduction</h2>
+<p>This is not a tutorial on how to use <a href="https://irony.codeplex.com/" target="_blank">Irony.net</a>. When I am done with this series of articles, hopefully we will never need to deal with Irony directly ever again.</p>
+<p>In case you didn&#39;t know what Irony is, here is the introduction on its official site:</p>
+<blockquote>
+<p><strong>Irony</strong> is a development kit for implementing languages on .NET platform. Unlike most existing yacc/lex-style solutions Irony does not employ any scanner or parser code generation from grammar specifications written in a specialized meta-language. In Irony the target language grammar is coded directly in c# using operator overloading to express grammar constructs. Irony&#39;s scanner and parser modules use the grammar encoded as c# class to control the parsing process.
+Looks fantastic. However, after I tried for days to implement CoffeeScript grammar with it, I encountered some  issues:</p>
+</blockquote>
+<ul>
+<li>While constructing grammar with C# directly sounds cool, the syntax is just not as clean and efficient as a special design DSL would be.</li>
+<li>There are absolutely no compile-time checking on grammar. You have to compile it into dll first, then load it with Irony.GrammarExplorer.</li>
+<li>It is extremely hard, if not impossible, to track any grammar errors back to source code.</li>
+<li><p>On top of that, debug information on Shift-Reduce and Reduce-Reduce conflict is almost unreadable for a complex grammar.
+It&#39;s a nice concept with poor tooling, which makes it scale poorly as the complexity of grammar grows. After some painstaking efforts to make my CoffeeScript parser to work, I finally begin to do something about it. I decide to create:</p>
+<blockquote>
+<p><strong>Sarcasm</strong>, an EBNF-like DSL that generates Irony.
+The design goals are to:</p>
+</blockquote>
+</li>
+<li><p>Implement a DSL that allow developers to define grammar in a more clean and efficient syntax that looks very much like EBNF notation.</p>
+</li>
+<li>Generate Irony grammar implementation (in C#) and a nice formatted grammar specification document (in MarkDown)</li>
+<li>Enable compile-time error checking and grammar validation</li>
+<li>Trace any errors back to the source code</li>
+<li>Improve the readability of debug information for grammar conflicts</li>
+<li>Provide necessary Visual Studio languages services, templates and tools</li>
+</ul>
+<h2 id="sarcasm-workflow">Sarcasm Workflow</h2>
+<ol>
+<li>Developer writes grammar specification file (.sarc)</li>
+<li>Compiler checks for syntax error and generates both Irony grammar class (in C#) and spec docs (in MarkDown)</li>
+<li>VS continues build process</li>
+<li>If build failed, Sarcasm tools filters though all error messages, and map related errors back to specific tokens in .sarc file.</li>
+<li>If build succeeded, Sarcasm tools loads the assembly and validates grammar.</li>
+<li>Sarcasm tools translates any grammar conflicts, errors into a readable format and trace back to specific rule in .sarc file.
+The entire workflow should be seamlessly integrated with Visual Studio.</li>
+</ol>
+<h2 id="sarcasm-grammar">Sarcasm Grammar</h2>
+<p>In a nutshell, the Sarcasm grammar is a hybrid of MakeDown and modified EBNF notation. Here&#39;s a quick snippet:<span style="line-height: 1.5em;"> </span></p>
+<p><pre class="brush:plain"># H1</p>
+<p>/<em>
+Block comment
+</em>/</p>
+<p>// Single Line Comment</p>
+<p>// Directive
+@class SarcasmGrammar</p>
+<h2 id="h2">H2</h2>
+<p>// Declarations
+ID      = new IdentifierTerminal(&quot;ID&quot;);
+STRING  = new StringLiteral(&quot;STRING&quot;, &quot;\&quot;&quot;, StringOptions.AllowsAllEscapes);</p>
+<p>// Production Rules
+SimpleValue := STRING | ID;  </p>
+<p>// Repeat
+Ids := ID{};
+Ids := ID*;
+Ids := ID?;
+Ids := ID+;</p>
+<p>// Repeat with delimiters
+Ids := ID{&quot;,&quot;};
+Ids := ID*(&quot;.&quot;);
+Ids := ID+(&quot;,&quot;);</p>
+<h3 id="h3-pre-">H3</pre></h3>
+<p>As you can see, the grammar consists of:</p>
+<ul>
+<li>MarkDown headers (start with one or more <span style="text-decoration: underline;">#</span>). Directly used for outlining.</li>
+<li>Comments (single line and block). All other text contents go into comments. MarkDown syntax can be used in comments.</li>
+<li>Directives (starting with <span style="text-decoration: underline;">@)</span>. Configures compiler behaviors like generated class names.</li>
+<li>Declarations. Declare and initialize grammar terminals.</li>
+<li>Production rules. Specifies the grammar rules.
+I won&#39;t go into full details here. But you can see for yourself:</li>
+</ul>
+<p>Here is the <a href="https://gist.github.com/akfish/9167407#file-sarcasm-sarc" target="_blank">full grammar of Sarcasm writing in Sarcasm</a>.</p>
+<p>And here is the  <a href="https://gist.github.com/akfish/9167407#file-sarcasm-md" target="_blank">MarkDown specification documentation generated from that file</a></p>
+<p>While the <a href="https://github.com/akfish/Sarcasm" target="_blank">project </a> is still in early developing stage, the grammar is mostly completed. I should be able to bootstrap it in a day or two.</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2014/02/25/the-making-of-sarcasm-1/" data-id="z8m5qkpyi1fxxbdq" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/.Net/">.Net</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/compiler/">compiler</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-why-pseudo-random-generator-use-magic-number-9301-49297-233280" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/02/22/why-pseudo-random-generator-use-magic-number-9301-49297-233280/" class="article-date">
+  <time datetime="2014-02-22T07:01:45.000Z" itemprop="datePublished">Feb 22 2014</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/02/22/why-pseudo-random-generator-use-magic-number-9301-49297-233280/">JavaScript随机数生成算法中为什么要用9301, 49297, 233280作为Magic Number</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>今天在知乎上回答了这样一个问题：<a href="http://www.zhihu.com/question/22818104" target="_blank">网上常能见到的一段JS随机数生成算法如下，为什么用9301, 49297, 233280这三个数字做基数？</a></p>
+<p>问题中提到的代码如下：</p>
+<p><pre class="brush:js">function rnd( seed ){
+    seed = ( seed * 9301 + 49297 ) % 233280; //Magic!
+    return seed / ( 233280.0 );
+};</p>
+<p>function rand(number){
+    today = new Date(); 
+    seed = today.getTime();
+    return Math.ceil( rnd( seed ) * number );
+};</p>
+<p>myNum=(rand(5));</pre>
+经过一系列的digging，最终找到了这个问题的答案，这三个数的选择是有数学依据的。</p>
+<p><strong>入门级的选择标准</strong>
+这种随机数生成器叫做线性同余生成器（LCG, Linear Congruential Generator)，几乎所有的运行库提供的rand都是采用的LCG，形如：
+[latex]I_{n+1}=aI_n + c\ (mod\ m)[/latex]
+生成的随机数序列最大周期m，生成0到m-1之间的随机数。要达到这个最大周期，必须满足</p>
+<ul>
+<li>c与m互质</li>
+<li>a - 1可以被m的所有质因数整除</li>
+<li>如果m是4的倍数，a - 1也必须是4的倍数
+以上三条被称为Hull-Dobell定理。
+作为一个随机数生成器，周期不够大是不好意思混的，所以这是要求之一。
+可以看到，a=9301, c = 49297, m = 233280这组参数，以上三条全部满足。</li>
+</ul>
+<p><strong>进阶级的选择标准</strong>
+要在随机数生成器界混，仅仅入门是不够的。
+从工程的角度来讲，<a href="m -  1">latex</a>a + c[/latex]的值要（在合理的范围内）足够小，以避免溢出的问题。
+从安全（实用）性的角度来讲，还要满足良好的随机性，这一点可以通过Knunth&#39;s Spectral Test来评估（见[2]），要通过2,3,4,5以及6维的Spectral Test才行。Spectral Test考察的就是生成的随机数序列在超空间的网格结构（lattice structure），当年IBM的RANDU子程序闹出的乌龙，连3维的Spectral Test就不能通过，上图嘲讽下：</p>
+<p><a href="http://catx.me/wordpress/wp-content/uploads/2014/02/800px-Randu.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/800px-Randu.png" alt="800px-Randu"></a></p>
+<p>&nbsp;</p>
+<p>其中每个点代表三个连续的RANDU生成的随机数值，可以看到所有随机数分布在了15个二维平面上。</p>
+<p>在这种要求面前，c的值最好：</p>
+<ul>
+<li>是质数 （c = 49297就是质数）</li>
+<li>接近<a href="\frac{1}{2}-\frac{1}{6}\sqrt{3}">latex</a>m[/latex],(m = 233280时为49297.86460172205)
+所以有了这样一些基本的标准，能够选择的参数范围就小了很多，弄个程序跑下Spectral Test，就能得到可选的参数组：</li>
+</ul>
+<p><a href="http://catx.me/wordpress/wp-content/uploads/2014/02/Unnamed-QQ-Screenshot20140222141315.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/Unnamed-QQ-Screenshot20140222141315.png" alt="Magic Number for LCG Random Generator"></a></p>
+<p>&nbsp;</p>
+<p>参考资料：<a href="http://nuclear.fis.ucm.es/COMP-PHYS/RANDOM/RandomNumbers.pdf" target="_blank">[1]</a><a href="http://random.mat.sbg.ac.at/tests/theory/spectral/" target="_blank">[2]</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2014/02/22/why-pseudo-random-generator-use-magic-number-9301-49297-233280/" data-id="gs2pxzxs2iyogqc1" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Algorithm/">Algorithm</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Magic Number/">Magic Number</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Math/">Math</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Random/">Random</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-visual-studio-gplex-gppg-project-config" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/02/08/visual-studio-gplex-gppg-project-config/" class="article-date">
+  <time datetime="2014-02-07T21:10:49.000Z" itemprop="datePublished">Feb 8 2014</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/02/08/visual-studio-gplex-gppg-project-config/">Visual Studio GPLEX/GPPG配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>入手实现Coffee#（CoffeeScript for .Net）的编译器时，发现了<a href="http://gplex.codeplex.com" target="_blank">GPLEX</a>和<a href="http://gppg.codeplex.com/" target="_blank">GPPG</a>这一对.Net环境下类Lex和Yacc的工具，用于自动生成C#实现的Scanner和Parser，可以快速的构建编译器的前端部分。使用时需要编写.lex（词法描述）和.y（语法描述）文件，调用工具生成.cs文件，加入到工程中编译。</p>
+<p>通过修改csproject文件的配置，可以让vs自动处理.lex/.y文件的生成以及依赖关系。工程目录结构如下：</p>
+<blockquote>
+<p>CoffeeSharp
+├─documents
+├─src
+│ └─CoffeeSharp
+│ ├─CoffeeSharp.csproj
+│ ├─Scanner.lex
+│ ├─Scanner.cs
+│ ├─Parser.y
+│ ├─Parser.cs
+│ └─...
+└─tools
+├─gppg.exe
+└─gplex.exe
+编辑CoffeeScript.csproj文件：</p>
+</blockquote>
+<p>1. 添加依赖关系：</p>
+<p><pre class="brush:xml">  &lt;!-- Generated with GPLEX and GPPG--&gt;
+  &lt;ItemGroup&gt;
+    &lt;Compile Include=&quot;Scanner.cs&quot;&gt;
+      &lt;AutoGen&gt;True&lt;/AutoGen&gt;
+      &lt;DependentUpon&gt;Scanner.lex&lt;/DependentUpon&gt;
+    &lt;/Compile&gt;
+    &lt;Compile Include=&quot;Parser.cs&quot;&gt;
+      &lt;AutoGen&gt;True&lt;/AutoGen&gt;
+      &lt;DependentUpon&gt;Parser.y&lt;/DependentUpon&gt;
+    &lt;/Compile&gt;
+  &lt;/ItemGroup&gt;</pre>
+2. 创建Lex/Yacc Target（修改原有的.lex/.y文件项）</p>
+<p><pre class="brush:xml">  &lt;!-- Lexer And Parser Specification Files --&gt;
+  &lt;ItemGroup&gt;
+    &lt;Lex Include=&quot;Scanner.lex&quot; /&gt;
+    &lt;Yacc Include=&quot;Parser.y&quot; /&gt;
+  &lt;/ItemGroup&gt;</pre>
+3. 设置Target生成规则，命令行根据实际情况修改</p>
+<p><pre class="brush:xml">  &lt;!-- Lex Target --&gt;
+  &lt;Target Name=&quot;LexGenerator&quot; Inputs=&quot;@(Lex)&quot; Outputs=&quot;@(Lex-&gt;&#39;%(RelativeDir)%(Filename).cs&#39;)&quot;&gt;
+    &lt;Exec Command=&quot;$(SolutionDir)..\tools\gplex.exe /unicode /out:@(Lex -&gt;&#39;%(RelativeDir)%(Filename).cs&#39;) %(Lex.Identity)&quot; /&gt;
+    &lt;CreateItem Include=&quot;%(Lex.RelativeDir)%(Lex.Filename).cs&quot;&gt;
+      &lt;Output TaskParameter=&quot;Include&quot; ItemName=&quot;FileWrites&quot; /&gt;
+    &lt;/CreateItem&gt;
+  &lt;/Target&gt;
+  &lt;!-- Yacc Target --&gt;
+  &lt;Target Name=&quot;YaccGenerator&quot; Inputs=&quot;@(Yacc)&quot; Outputs=&quot;@(Yacc-&gt;&#39;%(RelativeDir)%(Filename).cs&#39;)&quot;&gt;
+    &lt;Exec Command=&quot;$(SolutionDir)..\tools\gppg.exe /gplex /out:@(Yacc -&gt;&#39;%(RelativeDir)%(Filename).cs&#39;) %(Yacc.Identity)&quot; /&gt;
+    &lt;CreateItem Include=&quot;%(Yacc.RelativeDir)%(Yacc.Filename).cs&quot;&gt;
+      &lt;Output TaskParameter=&quot;Include&quot; ItemName=&quot;FileWrites&quot; /&gt;
+    &lt;/CreateItem&gt;
+  &lt;/Target&gt;</pre>
+4. 设置依赖关系</p>
+<p><pre class="brush:xml">&lt;PropertyGroup&gt;
+    &lt;BuildDependsOn&gt;LexGenerator;YaccGenerator;$(BuildDependsOn)&lt;/BuildDependsOn&gt;
+    &lt;CompileDependsOn&gt;LexGenerator;YaccGenerator;$(CompileDependsOn)&lt;/CompileDependsOn&gt;
+  &lt;/PropertyGroup&gt;</pre>
+重新载入工程文件，会看到生成的.cs文件都折叠在了对应的.lex/.y文件之下：
+<a href="http://catx.me/wordpress/wp-content/uploads/2014/02/yacc-lex-config.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/yacc-lex-config.png" alt="yacc-lex-config"></a>编译时的错误信息也会显示在vs中：
+<a href="http://catx.me/wordpress/wp-content/uploads/2014/02/lex-error.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/lex-error.png" alt="lex-error"></a>
+和使用pre-build event来实现预编译相比，这种方式最大的优点在于依赖关系明显，不易误操作编辑生成的文件，并且vs只会在.lex/.y文件有变更的情况下重新生成代码。支持按需生成会省不少事，比如在项目中配置了git pre-commit hook要求<a href="http://catx.me/2014/01/15/run-msbuild-and-mstest-from-git-pre-commit-hook/" title="通过Git Pre-Commit Hook执行MSBuild和MSTest" target="_blank">每次commit前检查build和test的正确性</a>，而很多代码自动生成工具会加上时间戳，这样编译一次就会带来文件变更，导致每次commit后都会产生新的diff。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2014/02/08/visual-studio-gplex-gppg-project-config/" data-id="zsr73ko61j60k4w5" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/.Net/">.Net</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/CoffeeScript/">CoffeeScript</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Visual Studio 2012/">Visual Studio 2012</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/compiler/">compiler</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-get-and-visualize-grammar-definition-of-coffee-script-from-source-code" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/02/06/get-and-visualize-grammar-definition-of-coffee-script-from-source-code/" class="article-date">
+  <time datetime="2014-02-05T16:55:24.000Z" itemprop="datePublished">Feb 6 2014</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/02/06/get-and-visualize-grammar-definition-of-coffee-script-from-source-code/">从CoffeeScript源代码中获取文法并可视化</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>最近在研究把CoffeeScript编译到.Net CLR环境上运行的可能性，在几个CoffeeScript compiler的实现中，没有发现对文法定义的specification，如果要人肉重建不仅工作量忧桑，还有可能导致兼容性问题。于是看了下源代码，发现略施小计就能解决这个问题。</p>
+<p>CoffeeScript的Parser使用jison生成的，所有的文法都在<a href="http://coffeescript.org/documentation/docs/grammar.html" target="_blank">grammar.coffee</a>里定义了。这个代码非常好改，去掉对jison的调用，把语法定义用JSON.stringify() format了再输出，执行<a href="https://gist.github.com/akfish/8827385" target="_blank">修改后的代码</a>：</p>
+<blockquote>
+<p>coffee grammar.coffee
+就会得到一大串jison格式的文法定义：</p>
+<p><pre class="brush:js">{
+  &quot;tokens&quot;:&quot; TERMINATOR TERMINATOR TERMINATOR STATEMENT INDENT OUTDENT INDENT OUTDENT IDENTIFIER NUMBER STRING JS REGEX BOOL = = INDENT OUTDENT : : INDENT OUTDENT RETURN RETURN HERECOMMENT PARAM_START PARAM_END -&gt; =&gt;  ,  , ... = ... . ?. :: :: INDEX_START INDEX_END INDEX_SOAK { }  , TERMINATOR INDENT OUTDENT CLASS CLASS CLASS EXTENDS CLASS EXTENDS CLASS CLASS CLASS EXTENDS CLASS EXTENDS SUPER SUPER  FUNC_EXIST CALL_START CALL_END CALL_START CALL_END THIS @ @ [ ] [ ] .. ... [ ] , TERMINATOR INDENT OUTDENT INDENT OUTDENT , TRY TRY TRY FINALLY TRY FINALLY CATCH THROW ( ) ( INDENT OUTDENT ) WHILE WHILE WHEN UNTIL UNTIL WHEN LOOP LOOP FOR FOR FOR OWN , FORIN FOROF FORIN WHEN FOROF WHEN FORIN BY FORIN WHEN BY FORIN BY WHEN SWITCH INDENT OUTDENT SWITCH INDENT ELSE OUTDENT SWITCH INDENT OUTDENT SWITCH INDENT ELSE OUTDENT LEADING_WHEN LEADING_WHEN TERMINATOR IF ELSE IF ELSE POST_IF POST_IF UNARY - + -- ++ -- ++ ? + - MATH SHIFT COMPARE LOGIC RELATION COMPOUND_ASSIGN COMPOUND_ASSIGN INDENT OUTDENT EXTENDS&quot;,
+  &quot;bnf&quot;:
+  {
+    &quot;Root&quot;:
+    [
+      [&quot;&quot;,&quot;return $$ = new yy.Block;&quot;,null],
+      [&quot;Body&quot;,&quot;return $$ = $1;&quot;,null],
+      [&quot;Block TERMINATOR&quot;,&quot;return $$ = $1;&quot;,null]
+    ],
+    &quot;Body&quot;:
+    [
+      [&quot;Line&quot;,&quot;$$ = yy.Block.wrap([$1]);&quot;,null],
+      [&quot;Body TERMINATOR Line&quot;,&quot;$$ = $1.push($3);&quot;,null],
+      [&quot;Body TERMINATOR&quot;,&quot;$$ = $1;&quot;,null]
+    ],
+    &quot;Line&quot;:
+    [
+      [&quot;Expression&quot;,&quot;$$ = $1;&quot;,null],
+      [&quot;Statement&quot;,&quot;$$ = $1;&quot;,null]
+    ],
+    ...</pre>
+这样已经算是可用了，但可读性依然不高，经过一番搜索发现一个jison-to-w3c文法标记格式的<a href="http://bottlecaps.de/convert/" target="_blank">转换器</a>，得到<a href="https://gist.github.com/akfish/8827385" target="_blank">文法</a>：</p>
+<p><pre class="brush:plain">Root     ::= Body?
+Body     ::= Line ( TERMINATOR Line | TERMINATOR )*
+Line     ::= Expression
+           | Statement
+Statement
+         ::= Return
+           | Comment
+           | STATEMENT
+Expression
+         ::= Value
+           | Invocation
+           | Code
+           | Operation
+           | Assign
+           | If
+           | Try
+           | While
+           | For
+           | Switch
+           | Class
+           | Throw
+...</pre>
+最后找到一个可视化文法的网站<a href="http://bottlecaps.de/rr/ui" target="_blank">Railroad Diagram Generator</a>将其可视化，just for fun:</p>
+</blockquote>
+<p><a href="http://catx.me/wordpress/wp-content/uploads/2014/02/coffee-grammar.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/coffee-grammar.png" alt="coffee-grammar"></a></p>
+<p>&nbsp;</p>
+<p>完整的图在：<a href="http://project.catx.me/other/coffee-grammar.xhtml" target="_blank"><a href="http://project.catx.me/other/coffee-grammar.xhtml">http://project.catx.me/other/coffee-grammar.xhtml</a></a></p>
+<p>源代码+完整的文法定义：<a href="https://gist.github.com/akfish/8827385" target="_blank"><a href="https://gist.github.com/akfish/8827385">https://gist.github.com/akfish/8827385</a></a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2014/02/06/get-and-visualize-grammar-definition-of-coffee-script-from-source-code/" data-id="rjdbkm9vv579knfw" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/.Net/">.Net</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/CoffeeScript/">CoffeeScript</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/compiler/">compiler</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+  
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/硬/">硬</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/硬/">硬</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/美剧/">美剧</a><span class="category-list-count">1</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/.Net/">.Net</a><span class="tag-list-count">5</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Algorithm/">Algorithm</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/BitCoin/">BitCoin</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/C++/">C++</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CUDA/">CUDA</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CoffeeScript/">CoffeeScript</a><span class="tag-list-count">3</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Design/">Design</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Emacs/">Emacs</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Fringe/">Fringe</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/GPU/">GPU</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/GitHub/">GitHub</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Linux/">Linux</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Lisp/">Lisp</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Magic Number/">Magic Number</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Markdown/">Markdown</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Math/">Math</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Random/">Random</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Ribbon/">Ribbon</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Sarcasm/">Sarcasm</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Shell/">Shell</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/UI/">UI</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/VM/">VM</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Visual Studio 2012/">Visual Studio 2012</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Windows 8/">Windows 8</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/compiler/">compiler</a><span class="tag-list-count">5</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/git/">git</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/gmail/">gmail</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/optimization/">optimization</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/python/">python</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/sudo/">sudo</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/template/">template</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/windows phone 7/">windows phone 7</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/云/">云</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/前端/">前端</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/单片机/">单片机</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/命令行/">命令行</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/图/">图</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/天文/">天文</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/工具/">工具</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/拆/">拆</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/测试/">测试</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/电子/">电子</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/管理/">管理</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/美剧/">美剧</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/豆瓣/">豆瓣</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/逆向/">逆向</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/音乐/">音乐</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/风扇/">风扇</a><span class="tag-list-count">2</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/.Net/" style="font-size: 20.00px;">.Net</a><a href="/tags/Algorithm/" style="font-size: 10.00px;">Algorithm</a><a href="/tags/BitCoin/" style="font-size: 10.00px;">BitCoin</a><a href="/tags/C++/" style="font-size: 13.33px;">C++</a><a href="/tags/CUDA/" style="font-size: 10.00px;">CUDA</a><a href="/tags/CoffeeScript/" style="font-size: 16.67px;">CoffeeScript</a><a href="/tags/Design/" style="font-size: 10.00px;">Design</a><a href="/tags/Emacs/" style="font-size: 10.00px;">Emacs</a><a href="/tags/Fringe/" style="font-size: 10.00px;">Fringe</a><a href="/tags/GPU/" style="font-size: 10.00px;">GPU</a><a href="/tags/GitHub/" style="font-size: 13.33px;">GitHub</a><a href="/tags/Linux/" style="font-size: 10.00px;">Linux</a><a href="/tags/Lisp/" style="font-size: 10.00px;">Lisp</a><a href="/tags/Magic Number/" style="font-size: 10.00px;">Magic Number</a><a href="/tags/Markdown/" style="font-size: 10.00px;">Markdown</a><a href="/tags/Math/" style="font-size: 10.00px;">Math</a><a href="/tags/Random/" style="font-size: 10.00px;">Random</a><a href="/tags/Ribbon/" style="font-size: 10.00px;">Ribbon</a><a href="/tags/Sarcasm/" style="font-size: 10.00px;">Sarcasm</a><a href="/tags/Shell/" style="font-size: 10.00px;">Shell</a><a href="/tags/UI/" style="font-size: 10.00px;">UI</a><a href="/tags/VM/" style="font-size: 10.00px;">VM</a><a href="/tags/Visual Studio 2012/" style="font-size: 13.33px;">Visual Studio 2012</a><a href="/tags/Windows 8/" style="font-size: 10.00px;">Windows 8</a><a href="/tags/compiler/" style="font-size: 20.00px;">compiler</a><a href="/tags/git/" style="font-size: 13.33px;">git</a><a href="/tags/gmail/" style="font-size: 10.00px;">gmail</a><a href="/tags/optimization/" style="font-size: 10.00px;">optimization</a><a href="/tags/python/" style="font-size: 10.00px;">python</a><a href="/tags/sudo/" style="font-size: 10.00px;">sudo</a><a href="/tags/template/" style="font-size: 10.00px;">template</a><a href="/tags/windows phone 7/" style="font-size: 10.00px;">windows phone 7</a><a href="/tags/云/" style="font-size: 10.00px;">云</a><a href="/tags/前端/" style="font-size: 10.00px;">前端</a><a href="/tags/单片机/" style="font-size: 13.33px;">单片机</a><a href="/tags/命令行/" style="font-size: 10.00px;">命令行</a><a href="/tags/图/" style="font-size: 10.00px;">图</a><a href="/tags/天文/" style="font-size: 13.33px;">天文</a><a href="/tags/工具/" style="font-size: 10.00px;">工具</a><a href="/tags/拆/" style="font-size: 10.00px;">拆</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/03">March 2014</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/02">February 2014</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/01">January 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/10">October 2013</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/09">September 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/02">February 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2012/05">May 2012</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/09">September 2011</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/06">June 2011</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/05">May 2011</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/04">April 2011</a><span class="archive-list-count">5</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recents</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2014/03/06/hello-world/">Hello World</a>
+          </li>
+        
+          <li>
+            <a href="/2014/03/01/generate-dynamic-proxy-class-at-runtime-with-ilgenerator-c-sharp/">用C# ILGenerator在运行时动态生成proxy</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/28/the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization/">The Making Of Sarcasm (2) - AST, Generators and Fun with Visualization</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/25/the-making-of-sarcasm-1/">The Making Of Sarcasm (1) - Design Goals And Grammar</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/22/why-pseudo-random-generator-use-magic-number-9301-49297-233280/">JavaScript随机数生成算法中为什么要用9301, 49297, 233280作为Magic Number</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2014 John Doe<br>
+      Powered by <a href="http://zespia.tw/hexo/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script type="text/javascript" src="/js/script.js"></script>
+  </div>
+</body>
+</html>

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Tag: Visual Studio 2012 | Hexo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="og:type" content="blog">
+<meta name="og:title">
+<meta name="og:url" content="http://yoursite.com/tags/Visual Studio 2012/">
+<meta name="og:image">
+<meta name="og:site_name" content="Hexo">
+<meta name="og:description">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternative" href="/atom.xml" title="Hexo" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  <link href="http://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  <link rel="stylesheet" href="/css/style.css" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+</head>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Hexo</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" results="0" class="search-form-input" placeholder="Search"><input type="submit" value="&#xF002;" class="search-form-submit"><input type="hidden" name="q" value="site:http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-visual-studio-gplex-gppg-project-config" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2014/02/08/visual-studio-gplex-gppg-project-config/" class="article-date">
+  <time datetime="2014-02-07T21:10:49.000Z" itemprop="datePublished">Feb 8 2014</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2014/02/08/visual-studio-gplex-gppg-project-config/">Visual Studio GPLEX/GPPG配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>入手实现Coffee#（CoffeeScript for .Net）的编译器时，发现了<a href="http://gplex.codeplex.com" target="_blank">GPLEX</a>和<a href="http://gppg.codeplex.com/" target="_blank">GPPG</a>这一对.Net环境下类Lex和Yacc的工具，用于自动生成C#实现的Scanner和Parser，可以快速的构建编译器的前端部分。使用时需要编写.lex（词法描述）和.y（语法描述）文件，调用工具生成.cs文件，加入到工程中编译。</p>
+<p>通过修改csproject文件的配置，可以让vs自动处理.lex/.y文件的生成以及依赖关系。工程目录结构如下：</p>
+<blockquote>
+<p>CoffeeSharp
+├─documents
+├─src
+│ └─CoffeeSharp
+│ ├─CoffeeSharp.csproj
+│ ├─Scanner.lex
+│ ├─Scanner.cs
+│ ├─Parser.y
+│ ├─Parser.cs
+│ └─...
+└─tools
+├─gppg.exe
+└─gplex.exe
+编辑CoffeeScript.csproj文件：</p>
+</blockquote>
+<p>1. 添加依赖关系：</p>
+<p><pre class="brush:xml">  &lt;!-- Generated with GPLEX and GPPG--&gt;
+  &lt;ItemGroup&gt;
+    &lt;Compile Include=&quot;Scanner.cs&quot;&gt;
+      &lt;AutoGen&gt;True&lt;/AutoGen&gt;
+      &lt;DependentUpon&gt;Scanner.lex&lt;/DependentUpon&gt;
+    &lt;/Compile&gt;
+    &lt;Compile Include=&quot;Parser.cs&quot;&gt;
+      &lt;AutoGen&gt;True&lt;/AutoGen&gt;
+      &lt;DependentUpon&gt;Parser.y&lt;/DependentUpon&gt;
+    &lt;/Compile&gt;
+  &lt;/ItemGroup&gt;</pre>
+2. 创建Lex/Yacc Target（修改原有的.lex/.y文件项）</p>
+<p><pre class="brush:xml">  &lt;!-- Lexer And Parser Specification Files --&gt;
+  &lt;ItemGroup&gt;
+    &lt;Lex Include=&quot;Scanner.lex&quot; /&gt;
+    &lt;Yacc Include=&quot;Parser.y&quot; /&gt;
+  &lt;/ItemGroup&gt;</pre>
+3. 设置Target生成规则，命令行根据实际情况修改</p>
+<p><pre class="brush:xml">  &lt;!-- Lex Target --&gt;
+  &lt;Target Name=&quot;LexGenerator&quot; Inputs=&quot;@(Lex)&quot; Outputs=&quot;@(Lex-&gt;&#39;%(RelativeDir)%(Filename).cs&#39;)&quot;&gt;
+    &lt;Exec Command=&quot;$(SolutionDir)..\tools\gplex.exe /unicode /out:@(Lex -&gt;&#39;%(RelativeDir)%(Filename).cs&#39;) %(Lex.Identity)&quot; /&gt;
+    &lt;CreateItem Include=&quot;%(Lex.RelativeDir)%(Lex.Filename).cs&quot;&gt;
+      &lt;Output TaskParameter=&quot;Include&quot; ItemName=&quot;FileWrites&quot; /&gt;
+    &lt;/CreateItem&gt;
+  &lt;/Target&gt;
+  &lt;!-- Yacc Target --&gt;
+  &lt;Target Name=&quot;YaccGenerator&quot; Inputs=&quot;@(Yacc)&quot; Outputs=&quot;@(Yacc-&gt;&#39;%(RelativeDir)%(Filename).cs&#39;)&quot;&gt;
+    &lt;Exec Command=&quot;$(SolutionDir)..\tools\gppg.exe /gplex /out:@(Yacc -&gt;&#39;%(RelativeDir)%(Filename).cs&#39;) %(Yacc.Identity)&quot; /&gt;
+    &lt;CreateItem Include=&quot;%(Yacc.RelativeDir)%(Yacc.Filename).cs&quot;&gt;
+      &lt;Output TaskParameter=&quot;Include&quot; ItemName=&quot;FileWrites&quot; /&gt;
+    &lt;/CreateItem&gt;
+  &lt;/Target&gt;</pre>
+4. 设置依赖关系</p>
+<p><pre class="brush:xml">&lt;PropertyGroup&gt;
+    &lt;BuildDependsOn&gt;LexGenerator;YaccGenerator;$(BuildDependsOn)&lt;/BuildDependsOn&gt;
+    &lt;CompileDependsOn&gt;LexGenerator;YaccGenerator;$(CompileDependsOn)&lt;/CompileDependsOn&gt;
+  &lt;/PropertyGroup&gt;</pre>
+重新载入工程文件，会看到生成的.cs文件都折叠在了对应的.lex/.y文件之下：
+<a href="http://catx.me/wordpress/wp-content/uploads/2014/02/yacc-lex-config.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/yacc-lex-config.png" alt="yacc-lex-config"></a>编译时的错误信息也会显示在vs中：
+<a href="http://catx.me/wordpress/wp-content/uploads/2014/02/lex-error.png" target="_blank"><img src="http://catx.me/wordpress/wp-content/uploads/2014/02/lex-error.png" alt="lex-error"></a>
+和使用pre-build event来实现预编译相比，这种方式最大的优点在于依赖关系明显，不易误操作编辑生成的文件，并且vs只会在.lex/.y文件有变更的情况下重新生成代码。支持按需生成会省不少事，比如在项目中配置了git pre-commit hook要求<a href="http://catx.me/2014/01/15/run-msbuild-and-mstest-from-git-pre-commit-hook/" title="通过Git Pre-Commit Hook执行MSBuild和MSTest" target="_blank">每次commit前检查build和test的正确性</a>，而很多代码自动生成工具会加上时间戳，这样编译一次就会带来文件变更，导致每次commit后都会产生新的diff。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2014/02/08/visual-studio-gplex-gppg-project-config/" data-id="zsr73ko61j60k4w5" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/.Net/">.Net</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/CoffeeScript/">CoffeeScript</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Visual Studio 2012/">Visual Studio 2012</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/compiler/">compiler</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-cuda5-visual-studio-2012-fix" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2013/02/05/cuda5-visual-studio-2012-fix/" class="article-date">
+  <time datetime="2013-02-05T03:37:57.000Z" itemprop="datePublished">Feb 5 2013</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/挨踢/">挨踢</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2013/02/05/cuda5-visual-studio-2012-fix/">GPU并行编程CUDA5.0+Visual Studio 2012环境配置</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="-">问题</h1>
+<p>CUDA5.0并不支持Visual Studio 2012的v110 toolchain，所以在安装后尝试编译，会先后遇到如下的错误：</p>
+<pre class="brush:cpp">nvcc : fatal error : '-ccbin': expected a number</pre>
+<pre class="brush:cpp">**nvcc fatal : nvcc cannot find a supported cl version. Only MSVC 8.0 and MSVC 9.0 are supported**</pre>
+
+<h1 id="-">解决方案：</h1>
+<h2 id="1-">1.部署/修改配置文件</h2>
+<p>在C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\V110\BuildCustomizations文件夹中是MSBuild要完成编译的自定义配置文件，<span style="line-height: 22px; font-size: 13px;">需要手动部署（拷贝）到C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\V110\BuildCustomizations文件夹下。本文中路径为Win7 64bit默认安装后的路径，根据自己的安装情况调整。</span></p>
+<p><span style="line-height: 22px; font-size: 13px;">在这之前需要修改如下文件：</span></p>
+<p><strong><span style="line-height: 22px; font-size: 13px;">CUDA5.0.props中</span></strong></p>
+<p>找到如下行：</p>
+<pre class="brush:xml">&lt;CudaClVersion Condition="'$(PlatformToolset)' == 'v90'"&gt;2008&lt;/CudaClVersion&gt;
+&lt;CudaClVersion Condition="'$(PlatformToolset)' == 'v100'"&gt;2010&lt;/CudaClVersion&gt;</pre>
+添加：
+<pre class="brush:xml">&lt;CudaClVersion Condition="'$(PlatformToolset)' == 'v110'"&gt;2010&lt;/CudaClVersion&gt;</pre>
+**CUDA 5.0.targets中**
+
+找到CudaCleanDependsOn标签，改为：
+<pre class="brush:xml">&lt;CudaCleanDependsOn&gt;
+  $(CudaCompileDependsOn);
+  _SelectedFiles;
+  CudaFilterSelectedFiles;
+  AddCudaCompileMetadata;
+  AddCudaLinkMetadata;
+  AddCudaCompileDeps;
+  AddCudaCompilePropsDeps;
+  ValidateCudaBuild;
+  ValidateCudaCodeGeneration;
+  ComputeCudaCompileOutput;
+  PrepareForCudaBuild
+&lt;/CudaCleanDependsOn&gt;</pre>
+找到GenerateRelocatableDeviceCode，改为
+<pre class="brush:xml">GenerateRelocatableDeviceCode="%(CudaCompile.GenerateRelocatableDeviceCode)"</pre>
+找到CodeGeneration，改为
+<pre class="brush:xml">CodeGeneration="%(CudaCompile.CodeGenerationValues)"</pre>
+找到CommandLineTemplate，改为
+<pre class="brush:xml">CommandLineTemplate=""$(CudaToolkitNvccPath)" %(CudaCompile.BuildCommandLineTemplate) %(CudaCompile.ApiCommandLineTemplate) %(CudaCompile.CleanCommandLineTemplate)" /&gt;</pre>
+
+<h2 id="2-">2. 修改头文件</h2>
+<p>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v5.0\include文件夹中，host_config.h文件。</p>
+<p>找到</p>
+<pre class="brush:cpp">#if _MSC_VER &lt; 1400 || _MSC_VER &gt; 1600
+
+#error -- unsupported MSVC version! Only MSVC 8.0, 9.0, and 10.0 are supported!</pre>
+修改为：
+<pre class="brush:xml">#if _MSC_VER &lt; 1400 || _MSC_VER &gt; 1700
+
+#error -- unsupported MSVC version! Only MSVC 8.0, 9.0, and 10.0 are supported!</pre>
+
+<h2 id="3-">3. 语法高亮支持</h2>
+<ol>
+<li><span style="color: #333333; font-size: 13px; font-weight: normal; line-height: 22px;">菜单“Tools-&gt;Options…”，展开左侧“Text Editor”，点击“File Extension”.</span></li>
+<li><span style="color: #333333; font-size: 13px; font-weight: normal; line-height: 22px;">在“Extension”框中输入“cu”, 选择“Microsoft Visual C++”，点击“Add”，捅“OK”。</span></li>
+<li><span style="color: #333333; font-size: 13px; font-weight: normal; line-height: 22px;">重新打开文件</span></li>
+</ol>
+<h2 id="-"> </h2>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2013/02/05/cuda5-visual-studio-2012-fix/" data-id="57lqyyyw01llsbdq" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/CUDA/">CUDA</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/GPU/">GPU</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/Visual Studio 2012/">Visual Studio 2012</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+  
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/硬/">硬</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/硬/">硬</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/美剧/">美剧</a><span class="category-list-count">1</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/.Net/">.Net</a><span class="tag-list-count">5</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Algorithm/">Algorithm</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/BitCoin/">BitCoin</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/C++/">C++</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CUDA/">CUDA</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CoffeeScript/">CoffeeScript</a><span class="tag-list-count">3</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Design/">Design</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Emacs/">Emacs</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Fringe/">Fringe</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/GPU/">GPU</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/GitHub/">GitHub</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Linux/">Linux</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Lisp/">Lisp</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Magic Number/">Magic Number</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Markdown/">Markdown</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Math/">Math</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Random/">Random</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Ribbon/">Ribbon</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Sarcasm/">Sarcasm</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Shell/">Shell</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/UI/">UI</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/VM/">VM</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Visual Studio 2012/">Visual Studio 2012</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Windows 8/">Windows 8</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/compiler/">compiler</a><span class="tag-list-count">5</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/git/">git</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/gmail/">gmail</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/optimization/">optimization</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/python/">python</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/sudo/">sudo</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/template/">template</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/windows phone 7/">windows phone 7</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/云/">云</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/前端/">前端</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/单片机/">单片机</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/命令行/">命令行</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/图/">图</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/天文/">天文</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/工具/">工具</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/拆/">拆</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/测试/">测试</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/电子/">电子</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/管理/">管理</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/美剧/">美剧</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/豆瓣/">豆瓣</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/逆向/">逆向</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/音乐/">音乐</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/风扇/">风扇</a><span class="tag-list-count">2</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/.Net/" style="font-size: 20.00px;">.Net</a><a href="/tags/Algorithm/" style="font-size: 10.00px;">Algorithm</a><a href="/tags/BitCoin/" style="font-size: 10.00px;">BitCoin</a><a href="/tags/C++/" style="font-size: 13.33px;">C++</a><a href="/tags/CUDA/" style="font-size: 10.00px;">CUDA</a><a href="/tags/CoffeeScript/" style="font-size: 16.67px;">CoffeeScript</a><a href="/tags/Design/" style="font-size: 10.00px;">Design</a><a href="/tags/Emacs/" style="font-size: 10.00px;">Emacs</a><a href="/tags/Fringe/" style="font-size: 10.00px;">Fringe</a><a href="/tags/GPU/" style="font-size: 10.00px;">GPU</a><a href="/tags/GitHub/" style="font-size: 13.33px;">GitHub</a><a href="/tags/Linux/" style="font-size: 10.00px;">Linux</a><a href="/tags/Lisp/" style="font-size: 10.00px;">Lisp</a><a href="/tags/Magic Number/" style="font-size: 10.00px;">Magic Number</a><a href="/tags/Markdown/" style="font-size: 10.00px;">Markdown</a><a href="/tags/Math/" style="font-size: 10.00px;">Math</a><a href="/tags/Random/" style="font-size: 10.00px;">Random</a><a href="/tags/Ribbon/" style="font-size: 10.00px;">Ribbon</a><a href="/tags/Sarcasm/" style="font-size: 10.00px;">Sarcasm</a><a href="/tags/Shell/" style="font-size: 10.00px;">Shell</a><a href="/tags/UI/" style="font-size: 10.00px;">UI</a><a href="/tags/VM/" style="font-size: 10.00px;">VM</a><a href="/tags/Visual Studio 2012/" style="font-size: 13.33px;">Visual Studio 2012</a><a href="/tags/Windows 8/" style="font-size: 10.00px;">Windows 8</a><a href="/tags/compiler/" style="font-size: 20.00px;">compiler</a><a href="/tags/git/" style="font-size: 13.33px;">git</a><a href="/tags/gmail/" style="font-size: 10.00px;">gmail</a><a href="/tags/optimization/" style="font-size: 10.00px;">optimization</a><a href="/tags/python/" style="font-size: 10.00px;">python</a><a href="/tags/sudo/" style="font-size: 10.00px;">sudo</a><a href="/tags/template/" style="font-size: 10.00px;">template</a><a href="/tags/windows phone 7/" style="font-size: 10.00px;">windows phone 7</a><a href="/tags/云/" style="font-size: 10.00px;">云</a><a href="/tags/前端/" style="font-size: 10.00px;">前端</a><a href="/tags/单片机/" style="font-size: 13.33px;">单片机</a><a href="/tags/命令行/" style="font-size: 10.00px;">命令行</a><a href="/tags/图/" style="font-size: 10.00px;">图</a><a href="/tags/天文/" style="font-size: 13.33px;">天文</a><a href="/tags/工具/" style="font-size: 10.00px;">工具</a><a href="/tags/拆/" style="font-size: 10.00px;">拆</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/03">March 2014</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/02">February 2014</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/01">January 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/10">October 2013</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/09">September 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/02">February 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2012/05">May 2012</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/09">September 2011</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/06">June 2011</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/05">May 2011</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/04">April 2011</a><span class="archive-list-count">5</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recents</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2014/03/06/hello-world/">Hello World</a>
+          </li>
+        
+          <li>
+            <a href="/2014/03/01/generate-dynamic-proxy-class-at-runtime-with-ilgenerator-c-sharp/">用C# ILGenerator在运行时动态生成proxy</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/28/the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization/">The Making Of Sarcasm (2) - AST, Generators and Fun with Visualization</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/25/the-making-of-sarcasm-1/">The Making Of Sarcasm (1) - Design Goals And Grammar</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/22/why-pseudo-random-generator-use-magic-number-9301-49297-233280/">JavaScript随机数生成算法中为什么要用9301, 49297, 233280作为Magic Number</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2014 John Doe<br>
+      Powered by <a href="http://zespia.tw/hexo/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script type="text/javascript" src="/js/script.js"></script>
+  </div>
+</body>
+</html>

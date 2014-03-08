@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>对笔记本风扇的蛋疼研究(2)-串口控制与测速 | Hexo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="og:type" content="blog">
+<meta name="og:title" content="对笔记本风扇的蛋疼研究(2)-串口控制与测速">
+<meta name="og:url" content="http://yoursite.com/2011/05/12/fan-study-2-rmt/">
+<meta name="og:image" content="http://catx.me/wordpress/wp-content/uploads/2011/05/051211_1522_21.jpg">
+<meta name="og:site_name" content="Hexo">
+<meta name="og:description" content="第二部分完成。最大的体会就是现在的死程序员们已经被近乎无限的计算资源宠坏了。
+&nbsp;
+A.速度控制
+
+首先增加电路方便调试：
+两个按钮连接到两个中断口INT0/P3.2和IN1/P3.3，一个加速一个减速。
+两个LED连接到P0.1和P0.3，显示速度是否为0或者是否最大。
+一个开关接到风扇和Vcc之间，出错的话可以快速杀掉风扇。
+
+
+剩的就是代码了，PWM部分：
+//初始化PWM0
+voi">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternative" href="/atom.xml" title="Hexo" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  <link href="http://fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  <link rel="stylesheet" href="/css/style.css" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+</head>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Hexo</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" results="0" class="search-form-input" placeholder="Search"><input type="submit" value="&#xF002;" class="search-form-submit"><input type="hidden" name="q" value="site:http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-fan-study-2-rmt" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2011/05/12/fan-study-2-rmt/" class="article-date">
+  <time datetime="2011-05-12T15:23:02.000Z" itemprop="datePublished">May 12 2011</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/硬/">硬</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      对笔记本风扇的蛋疼研究(2)-串口控制与测速
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>第二部分完成。最大的体会就是现在的死程序员们已经被近乎无限的计算资源宠坏了。</p>
+<p>&nbsp;</p>
+<p><strong>A.速度控制
+</strong></p>
+<p>首先增加电路方便调试：</p>
+<p>两个按钮连接到两个中断口INT0/P3.2和IN1/P3.3，一个加速一个减速。</p>
+<p>两个LED连接到P0.1和P0.3，显示速度是否为0或者是否最大。</p>
+<p>一个开关接到风扇和Vcc之间，出错的话可以快速杀掉风扇。</p>
+<a id="more"></a>
+
+<p>剩的就是代码了，PWM部分：</p>
+<p><pre class="brush:cpp">//初始化PWM0</p>
+<p>void PWM_init(void) {</p>
+<pre><code>CCON = 0;
+
+CMOD = 0x02;
+
+CL = 0x00;
+
+CH = 0x00;
+
+CCAPM0 = 0x42;
+
+CCAP0L = 0x80;
+
+CCAP0H = 0x80;
+
+CR = 1;
+</code></pre><p>}</p>
+<p>//设置PWM0占空比实现速度控制</p>
+<p>void PWM0_set(unsigned char a) {</p>
+<pre><code>CCAP0L = a;
+
+CCAP0H = a;
+</code></pre><p>}</p>
+<p>//四个控速函数SPEED_UP(), SPEED_DOWN, SPEED_FULL, SPEED_STOP中调用PWM0_set，检查边界，处理LED，以UP为例</p>
+<p>unsigned char SPEED_UP(void) {</p>
+<pre><code>if (PWM_VALUE &amp;gt; 0x00) {
+
+    PWM_VALUE --;
+
+    PWM0_set(PWM_VALUE);
+
+    LED_L = 1;
+
+    LED_R = 1;
+
+    return 0x00;
+
+} else {
+
+    LED_R = 0;
+
+    return 0x02; //Top speed 0010,用于串口通信
+
+}
+</code></pre><p>}</p>
+<p>两个按钮的中断响应函数</p>
+<pre><code>//Left button
+
+void INT_1(void) interrupt 2 using 2 {
+
+    SPEED_DOWN();
+</code></pre><p>}</p>
+<p>//Right button</p>
+<p>void INT_0(void) interrupt 0 using 1 {</p>
+<pre><code>SPEED_UP();
+</code></pre><p>}</pre>
+<strong>B.串口通信
+</strong></p>
+<p>1.通信协议：</p>
+<p>波特率4800bps，停止位1。</p>
+<p>2.控制帧：</p>
+<div style="margin-left: 33pt;">
+<table style="border-collapse: collapse;" border="0"><colgroup> <col style="width: 94px;" /> <col style="width: 94px;" /> <col style="width: 151px;" /> <col style="width: 78px;" /> </colgroup>
+<tbody>
+<tr>
+<td style="padding-left: 7px; padding-right: 7px; border: solid 0.5pt;">HEAD(0xFE)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">CTRL(1 byte)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">PWM_VALUE(1 byte)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">END(0xFF)</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<p>由电脑发出实现控制。</p>
+<p>CTRL取值 a,s,w,d的ascii码，分别代表停止、减速、加速、全速，虽然其实只需要占用2位就能完成编码，主要是为了兼容一开始时用终端人肉调试时的习惯懒得修改。</p>
+<p>计划增加一个x控制码，可以直接将PWM占空比设定到第三位的PWM_VALUE。</p>
+<p>3.数据帧：</p>
+<p>单片机向电脑发送的数据，有两种类型。</p>
+<p>a.响应帧：</p>
+<p>每收到一个控制帧，就会传回一个响应帧，如果需要，可附加执行结果。</p>
+<div style="margin-left: 36pt;">
+<table style="border-collapse: collapse;" border="0"><colgroup> <col style="width: 94px;" /> <col style="width: 94px;" /> <col style="width: 151px;" /> <col style="width: 78px;" /> </colgroup>
+<tbody>
+<tr>
+<td style="padding-left: 7px; padding-right: 7px; border: solid 0.5pt;">TAG(0xF1)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">CTRL(1 byte)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">EXTRA_DATA(1 byte)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">END(0xFF)</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<p>TAG用于帧类型识别。</p>
+<p>CTRL与收到的控制帧相同。</p>
+<p>EXTRA_DATA为附加数据，目前只用到最后两位编码风扇是否达到最大或最小速度（0x02和0x01），便于电脑上客户端软件正确刷新UI。</p>
+<p>b.信息帧：</p>
+<p>每秒发送一帧，包含风扇转速。</p>
+<div style="margin-left: 36pt;">
+<table style="border-collapse: collapse;" border="0"><colgroup> <col style="width: 94px;" /> <col style="width: 113px;" /> <col style="width: 133px;" /> <col style="width: 78px;" /> </colgroup>
+<tbody>
+<tr>
+<td style="padding-left: 7px; padding-right: 7px; border: solid 0.5pt;">TAG(0xF0)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">SPEED (1 byte)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">SPEED(1 byte)</td>
+<td style="padding-left: 7px; padding-right: 7px; border-top: solid 0.5pt; border-left: none; border-bottom: solid 0.5pt; border-right: solid 0.5pt;">END(0xFF)</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<p>TAG用于帧类型识别。</p>
+<p>SPEED从高位到低位存储。</p>
+<p>4.代码</p>
+<p><pre class="brush:cpp">//串口初始化</p>
+<p>void UART_init (void){</p>
+<pre><code>//EA = 1; //允许总中断
+
+ES = 1; //允许UART串口的中断
+
+//TMOD = 0x20;    //定时器T/C1工作方式2
+
+SCON = 0x50;    //串口工作方式1，允许串口接收（SCON = 0x40 时禁止串口接收）
+
+TH1 = 0xF3;    //定时器初值高8位设置
+
+TL1 = 0xF3;    //定时器初值低8位设置
+
+PCON = 0x80;    //波特率倍频（注销本句波特率为2400）
+
+TR1 = 1;    //定时器启动
+</code></pre><p>}</p>
+<p>//发送一个byte数据</p>
+<p>void UART_T (unsigned char UART_data){</p>
+<pre><code>SBUF = UART_data;    //将接收的数据发送回去
+
+while(TI == 0);        //检查发送中断标志位
+
+TI = 0;            //令发送中断标志位为0
+</code></pre><p>}</p>
+<p>//中断响应数据</p>
+<p>void UART_R (void) interrupt 4 using 1{</p>
+<pre><code>unsigned char UART_data; //定义串口接收数据变量
+
+RI = 0;            //令接收中断标志位为0（软件清零）
+
+UART_T(0xF1); //Response
+
+UART_data = SBUF;    //将接收到的数据送入变量 UART_data
+
+//用户函数内容（用户可使用UART_data做数据处理）
+
+UART_T(UART_data);
+
+switch (UART_data) {
+
+case &#39;a&#39;:
+
+    UART_T(SPEED_STOP());
+
+    break;
+
+case &#39;d&#39;:
+
+    UART_T(SPEED_FULL());
+
+    break;
+
+case &#39;w&#39;:
+
+    UART_T(SPEED_UP());
+
+    break;
+
+case &#39;s&#39;:
+
+    UART_T(SPEED_DOWN());
+
+    break;
+
+}
+
+UART_T(0xFF);
+</code></pre><p>}</pre>
+<strong>C.测速
+</strong></p>
+<p>风扇每转一圈输出2个脉冲，所以只要计算采样时间内脉冲数量就可以测速。要达到这个目的，需要一个计数器记录脉冲数量，一个定时器在固定的时间生成数据帧通过串口发送，然后清零计数器</p>
+<p>STC12C5A60S2有两个计时器/计数器T0和T1，T1已经被串口通信占用，所以只能使用T0作为计数器，将风扇黄色引脚连T0/P3.4</p>
+<p>还需要一个计时器，通过数据手册发现两个PWM口都可以被设置为定时器使用，于是用没有被占用的PWM1进行计时。</p>
+<p><pre class="brush:cpp">//计数器初始化</p>
+<p>void T_C_init (void){</p>
+<pre><code>//TMOD = 0x11; //高4位控制T/C1 [ GATE，C/T，M1，M0，GATE，C/T，M1，M0 ]
+
+//EA = 1;    //中断总开关
+
+TH0 = 0x00; //16位计数寄存器T0高8位
+
+TL0 = 0x00; //16位计数寄存器T0低8位s
+
+ET0 = 1; //T/C0中断开关
+
+TR0 = 1; //T/C0启动开关
+</code></pre><p>}</p>
+<p>//计数器中断响应</p>
+<p>void T_C0 (void) interrupt 1 using 1{</p>
+<pre><code>TH0 = 0x00; //重置计数器
+
+TL0 = 0x00; //以风扇的转速，这段代码被执行的概率非常低
+</code></pre><p>}</p>
+<p>//PWM1计时器模式</p>
+<p>void PCA_TIMER1_init() {</p>
+<pre><code>CCON = 0;
+
+CL = 0; //Reset PCA base time;
+
+CH = 0;
+
+CMOD = 0x00;    //Timer clock source as Fosc/12
+
+value = T100Hz;
+
+CCAP1L = value;
+
+CCAP1H = value &amp;gt;&amp;gt; 8;
+
+value += T100Hz;
+
+CCAPM1 = 0x49;    //PCA 0 in 16bit timer mode and enable PCA interuppt
+
+CR = 1;    //PCA timer start
+</code></pre><p>}</p>
+<p>unsigned int cnt = 0;</p>
+<p>//PWM1计时器中断，执行频率为100Hz，每1秒发送一个数据包</p>
+<p>void PCA_TIMER1() interrupt 7 using 1 {</p>
+<pre><code>CCF1 = 0;
+
+CCAP1L = value;
+
+CCAP1H = value &amp;gt;&amp;gt; 8;
+
+value += T100Hz;
+
+if (cnt == 100)
+
+{
+
+    UART_T(0xF0); //Info
+
+    UART_T(TH0);
+
+    UART_T(TL0);
+
+    UART_T(0xFF);
+
+    TH0 = 0x00;
+
+    TL0 = 0x00;
+
+    cnt = 0;
+
+} else {
+
+    cnt++;
+
+}
+</code></pre><p>}</pre>
+然后得事情就很简单了，用C#写了一个Windows Form Application来获取转速并实现控制：</p>
+<p><img src="http://catx.me/wordpress/wp-content/uploads/2011/05/051211_1522_21.jpg" alt=""></p>
+<p>最高转速为50RPS左右，约3000RPM，和在上一篇通过比特率估计的数量级一致。</p>
+<p>很有意思的一个发现是，风扇口被堵住时，转速会升高。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2011/05/12/fan-study-2-rmt/" data-id="ut7yt4j344agmmya" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/单片机/">单片机</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/电子/">电子</a></li><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/风扇/">风扇</a></li></ul>
+
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2011/06/05/bitcoin-conspiracy/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          关于BitCoin的几点想法
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2011/05/11/fan-study-1-pin-de/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">对笔记本风扇的蛋疼研究(1)-引脚定义研究</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/硬/">硬</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/囧/">囧</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/天文/">天文</a><span class="category-list-count">1</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/">挨踢</a><span class="category-list-count">15</span><ul class="category-list-child"><li class="category-list-item"><a class="category-list-link" href="/categories/挨踢/未分类/">未分类</a><span class="category-list-count">1</span></li></ul></li><li class="category-list-item"><a class="category-list-link" href="/categories/每日天文图片/">每日天文图片</a><span class="category-list-count">4</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/硬/">硬</a><span class="category-list-count">3</span></li><li class="category-list-item"><a class="category-list-link" href="/categories/美剧/">美剧</a><span class="category-list-count">1</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/.Net/">.Net</a><span class="tag-list-count">5</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Algorithm/">Algorithm</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/BitCoin/">BitCoin</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/C++/">C++</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CUDA/">CUDA</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/CoffeeScript/">CoffeeScript</a><span class="tag-list-count">3</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Design/">Design</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Emacs/">Emacs</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Fringe/">Fringe</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/GPU/">GPU</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/GitHub/">GitHub</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Linux/">Linux</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Lisp/">Lisp</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Magic Number/">Magic Number</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Markdown/">Markdown</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Math/">Math</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Random/">Random</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Ribbon/">Ribbon</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Sarcasm/">Sarcasm</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Shell/">Shell</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/UI/">UI</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/VM/">VM</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Visual Studio 2012/">Visual Studio 2012</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/Windows 8/">Windows 8</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/compiler/">compiler</a><span class="tag-list-count">5</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/git/">git</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/gmail/">gmail</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/optimization/">optimization</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/python/">python</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/sudo/">sudo</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/template/">template</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/windows phone 7/">windows phone 7</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/云/">云</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/前端/">前端</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/单片机/">单片机</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/命令行/">命令行</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/图/">图</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/天文/">天文</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/工具/">工具</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/拆/">拆</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/测试/">测试</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/电子/">电子</a><span class="tag-list-count">2</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/管理/">管理</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/美剧/">美剧</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/豆瓣/">豆瓣</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/逆向/">逆向</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/音乐/">音乐</a><span class="tag-list-count">1</span></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/风扇/">风扇</a><span class="tag-list-count">2</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/.Net/" style="font-size: 20.00px;">.Net</a><a href="/tags/Algorithm/" style="font-size: 10.00px;">Algorithm</a><a href="/tags/BitCoin/" style="font-size: 10.00px;">BitCoin</a><a href="/tags/C++/" style="font-size: 13.33px;">C++</a><a href="/tags/CUDA/" style="font-size: 10.00px;">CUDA</a><a href="/tags/CoffeeScript/" style="font-size: 16.67px;">CoffeeScript</a><a href="/tags/Design/" style="font-size: 10.00px;">Design</a><a href="/tags/Emacs/" style="font-size: 10.00px;">Emacs</a><a href="/tags/Fringe/" style="font-size: 10.00px;">Fringe</a><a href="/tags/GPU/" style="font-size: 10.00px;">GPU</a><a href="/tags/GitHub/" style="font-size: 13.33px;">GitHub</a><a href="/tags/Linux/" style="font-size: 10.00px;">Linux</a><a href="/tags/Lisp/" style="font-size: 10.00px;">Lisp</a><a href="/tags/Magic Number/" style="font-size: 10.00px;">Magic Number</a><a href="/tags/Markdown/" style="font-size: 10.00px;">Markdown</a><a href="/tags/Math/" style="font-size: 10.00px;">Math</a><a href="/tags/Random/" style="font-size: 10.00px;">Random</a><a href="/tags/Ribbon/" style="font-size: 10.00px;">Ribbon</a><a href="/tags/Sarcasm/" style="font-size: 10.00px;">Sarcasm</a><a href="/tags/Shell/" style="font-size: 10.00px;">Shell</a><a href="/tags/UI/" style="font-size: 10.00px;">UI</a><a href="/tags/VM/" style="font-size: 10.00px;">VM</a><a href="/tags/Visual Studio 2012/" style="font-size: 13.33px;">Visual Studio 2012</a><a href="/tags/Windows 8/" style="font-size: 10.00px;">Windows 8</a><a href="/tags/compiler/" style="font-size: 20.00px;">compiler</a><a href="/tags/git/" style="font-size: 13.33px;">git</a><a href="/tags/gmail/" style="font-size: 10.00px;">gmail</a><a href="/tags/optimization/" style="font-size: 10.00px;">optimization</a><a href="/tags/python/" style="font-size: 10.00px;">python</a><a href="/tags/sudo/" style="font-size: 10.00px;">sudo</a><a href="/tags/template/" style="font-size: 10.00px;">template</a><a href="/tags/windows phone 7/" style="font-size: 10.00px;">windows phone 7</a><a href="/tags/云/" style="font-size: 10.00px;">云</a><a href="/tags/前端/" style="font-size: 10.00px;">前端</a><a href="/tags/单片机/" style="font-size: 13.33px;">单片机</a><a href="/tags/命令行/" style="font-size: 10.00px;">命令行</a><a href="/tags/图/" style="font-size: 10.00px;">图</a><a href="/tags/天文/" style="font-size: 13.33px;">天文</a><a href="/tags/工具/" style="font-size: 10.00px;">工具</a><a href="/tags/拆/" style="font-size: 10.00px;">拆</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/03">March 2014</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/02">February 2014</a><span class="archive-list-count">5</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2014/01">January 2014</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/10">October 2013</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/09">September 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2013/02">February 2013</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2012/05">May 2012</a><span class="archive-list-count">1</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/09">September 2011</a><span class="archive-list-count">2</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/06">June 2011</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/05">May 2011</a><span class="archive-list-count">3</span></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2011/04">April 2011</a><span class="archive-list-count">5</span></li></ul>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recents</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2014/03/06/hello-world/">Hello World</a>
+          </li>
+        
+          <li>
+            <a href="/2014/03/01/generate-dynamic-proxy-class-at-runtime-with-ilgenerator-c-sharp/">用C# ILGenerator在运行时动态生成proxy</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/28/the-making-of-sarcasm-2-ast-generators-and-fun-with-visualization/">The Making Of Sarcasm (2) - AST, Generators and Fun with Visualization</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/25/the-making-of-sarcasm-1/">The Making Of Sarcasm (1) - Design Goals And Grammar</a>
+          </li>
+        
+          <li>
+            <a href="/2014/02/22/why-pseudo-random-generator-use-magic-number-9301-49297-233280/">JavaScript随机数生成算法中为什么要用9301, 49297, 233280作为Magic Number</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2014 John Doe<br>
+      Powered by <a href="http://zespia.tw/hexo/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script type="text/javascript" src="/js/script.js"></script>
+  </div>
+</body>
+</html>
